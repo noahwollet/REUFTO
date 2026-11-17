@@ -28,7 +28,7 @@ async function authRoute(req,path){
 export async function handle(req){
  const origin=req.headers.get('Origin');if(origin&&origin!==ALLOWED)return result({error:'Origin not allowed'},403);
  if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
- const raw=new URL(req.url);const path=raw.pathname.replace(/^\/functions\/v1\/academy/,'')||'/';
+ const raw=new URL(req.url);const path=raw.pathname.replace(/^\/(?:functions\/v1\/)?academy(?=\/|$)/,'')||'/';
  if(path.startsWith('/auth/'))return authRoute(req,path);
  const auth=req.headers.get('Authorization')||'';
  if(!auth.startsWith('Bearer ')){await securityEvent('Unsigned website access attempt',401);return result({error:'Sign in to your REU account.'},401)}
