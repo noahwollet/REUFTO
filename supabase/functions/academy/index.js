@@ -1,5 +1,4 @@
-import {emailVerificationCurrent,verificationKey,normalizePath} from './security.js';
-import {emailVerificationRoute} from './email-verification.js';
+import {mfaRequired,normalizePath} from './security.js';
 import worker from './core.js';
 import ASSETS from './assets.json' with {type:'json'};
 import {refreshReferenceAssets,referenceUploadChoices} from './reference-library.js';
@@ -41,9 +40,7 @@ export async function handle(req){
  if(!session||!await rpc('reu_session_live',{session_id:session,user_id:user.id}))return result({error:'Your session has ended. Sign in again.'},401);
  const cfg=await environment.BUCKET.get('academy/config.json');const config=cfg?await cfg.json():{members:[]};
  const email=user.email.toLowerCase();if(email!==CATALOG.bootstrapOwnerEmail&&!(config.members||[]).some(m=>m.email===email&&m.active!==false))return result({error:'This account has no REU training role.'},403);
- const stored=await environment.BUCKET.get(verificationKey(session));const approval=stored?await stored.json():null;
- if(path.startsWith('/api/academy/email-verification/')){const r=await emailVerificationRoute(req,path,user,claims,approval,securityEvent);return result(await r.json(),r.status)}
- if(!emailVerificationCurrent(approval,user))return result({error:'Verify the code sent to your email to continue.',code:'email_verification_required'},403);
+ if(mfaRequired(claims,user.factors||[]))return result({error:'Verify your authenticator to continue.',code:'mfa_required'},403);
  const headers=new Headers(req.headers);for(const k of [...headers.keys()])if(k.startsWith('oai-'))headers.delete(k);
  headers.set('oai-authenticated-user-id',user.id);headers.set('oai-authenticated-user-email',user.email.toLowerCase());
  // Names are display values only; roles and assignments come from server-controlled records.

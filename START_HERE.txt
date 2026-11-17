@@ -35,5 +35,5 @@ WHAT IS INCLUDED
 - .github/workflows: the existing optional Pages deployment workflow, which publishes docs.
 - README.md: technical setup and security notes.
 
-EMAIL VERIFICATION FOR ALL ROLES
-In Supabase Authentication > Email Templates > Magic Link, include {{ .Token }} in the email body and save. All roles sign in with their password, request a code, and enter it on the website. Verification lasts up to 15 days for that live sign-in; a new browser session or signing out requires a new code. The emailed code itself expires according to Supabase OTP settings, not after 15 days.
+AUTHENTICATOR FOR ALL ROLES
+After password sign-in, choose Set up authenticator, scan the QR code using your authenticator app, and enter its current code. Each person enrolls their own device. New sign-ins require an authenticator code. Verification codes are not sent by email. Keep access to the enrolled authenticator; lost-device recovery requires authorized Supabase account administration.

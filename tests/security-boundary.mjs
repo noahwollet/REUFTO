@@ -1,44 +1,20 @@
 import assert from 'node:assert/strict';
-import {EMAIL_VERIFICATION_MS,emailVerificationCurrent,passwordProven,normalizePath,verificationKey} from '../supabase/functions/academy/security.js';
-const now=Date.now(),userId='00000000-0000-4000-8000-000000000001',sessionId='00000000-0000-4000-8000-000000000002';
-let user={id:userId,email:'both@example.test',email_confirmed_at:'2026-01-01'};
-const approval={userId,email:user.email,verifiedAt:new Date(now).toISOString(),expiresAt:new Date(now+EMAIL_VERIFICATION_MS).toISOString()};
-assert.ok(emailVerificationCurrent(approval,user,now));assert.ok(emailVerificationCurrent(approval,user,now+EMAIL_VERIFICATION_MS-1));assert.equal(emailVerificationCurrent(approval,user,now+EMAIL_VERIFICATION_MS),false);
-assert.equal(emailVerificationCurrent({...approval,userId:'other'},user,now),false);assert.equal(emailVerificationCurrent({...approval,email:'other@example.test'},user,now),false);assert.equal(emailVerificationCurrent({...approval,expiresAt:new Date(now+EMAIL_VERIFICATION_MS+1000).toISOString()},user,now),false);assert.equal(emailVerificationCurrent({...approval,verifiedAt:new Date(now+1000).toISOString()},user,now),false);
-assert.equal(passwordProven({amr:[{method:'otp'}]},null,user),false);assert.ok(passwordProven({amr:[{method:'password'}]},null,user));
+import {mfaRequired,normalizePath} from '../supabase/functions/academy/security.js';
+const verified=[{status:'verified',factor_type:'totp'}];
+assert.ok(mfaRequired({aal:'aal1'},verified));assert.ok(mfaRequired({aal:'aal2'},[]));assert.ok(mfaRequired({aal:'aal2'},[{status:'unverified',factor_type:'totp'}]));assert.equal(mfaRequired({aal:'aal2'},verified),false);
 for(const prefix of ['/academy','/functions/v1/academy',''])assert.equal(normalizePath(prefix+'/auth/signup'),'/auth/signup');
 assert.equal(normalizePath('/academy-other/auth/signup'),'/academy-other/auth/signup');
 globalThis.Deno={env:{get:()=> 'test'},serve(){}};
-const {handle}=await import('../supabase/functions/academy/index.js');
-const {environment}=await import('../supabase/functions/academy/persistence.js');
-const worker=(await import('../supabase/functions/academy/core.js')).default;
-const records=new Map(),config={members:[{email:user.email,roles:['admin','trainee']},{email:'fto@example.test',roles:['trainer']},{email:'student@example.test',roles:['trainee']}]};
-environment.BUCKET={get:async key=>key==='academy/config.json'?{json:async()=>config}:records.has(key)?{json:async()=>records.get(key)}:null,put:async(key,value)=>{records.set(key,JSON.parse(value));return {etag:'test'}}};
-let live=true,valid=true,rateAllowed=true,seen,otpUser=user,otpFailure=false,lastOtp;
-const jwt=claims=>'test.'+btoa(JSON.stringify(claims))+'.test';
-globalThis.fetch=async(url,options={})=>{
- if(url.includes('/auth/v1/user'))return Response.json(user,{status:valid?200:401});
- if(url.includes('/rpc/reu_session_live'))return Response.json(live);
- if(url.includes('/rpc/reu_auth_attempt'))return Response.json(rateAllowed);
- if(url.includes('/reu_assets'))return Response.json([]);
- if(url.includes('/activity_events'))return Response.json({});
- if(url.includes('/auth/v1/otp')){lastOtp=JSON.parse(options.body);return Response.json({});}
- if(url.includes('/auth/v1/verify'))return otpFailure?Response.json({msg:'Invalid or expired code'},{status:403}):Response.json({user:otpUser,access_token:jwt({session_id:sessionId,amr:[{method:'otp'}]}),refresh_token:'test-refresh'});
- throw Error('Unexpected dependency '+url);
-};
+const {handle}=await import('../supabase/functions/academy/index.js');const {environment}=await import('../supabase/functions/academy/persistence.js');const worker=(await import('../supabase/functions/academy/core.js')).default;
+const config={members:[{email:'both@example.test',roles:['admin','trainee']},{email:'fto@example.test',roles:['trainer']},{email:'student@example.test',roles:['trainee']}]};environment.BUCKET={get:async()=>({json:async()=>config})};
+let live=true,valid=true,user={id:'user-1',email:'both@example.test',email_confirmed_at:'2026-01-01',factors:verified},seen;
+globalThis.fetch=async(url)=>{if(url.includes('/auth/v1/user'))return Response.json(user,{status:valid?200:401});if(url.includes('/rpc/reu_session_live'))return Response.json(live);if(url.includes('/reu_assets'))return Response.json([]);if(url.includes('/activity_events'))return Response.json({});throw Error('Unexpected dependency '+url)};
 worker.fetch=async req=>{seen=req;return Response.json({ok:true})};
-function request(path='/api/academy/trainees/test',headers={},body,method='password'){return new Request('https://project.supabase.co/academy'+path,{...(body?{method:'POST',body:JSON.stringify(body)}:{}),headers:{Authorization:'Bearer '+jwt({aal:'aal1',session_id:sessionId,amr:[{method}]}),...headers}})}
-for(const email of ['both@example.test','fto@example.test','student@example.test']){user={...user,email};assert.equal((await handle(request())).status,403);}user={...user,email:'both@example.test'};
-assert.equal((await handle(request(undefined,{'X-REU-Role':'trainee'}))).status,403);
-records.set(verificationKey(sessionId),approval);assert.equal((await handle(request())).status,200);
-assert.equal((await handle(request(undefined,{'oai-authenticated-user-email':'attacker@example.test','oai-authenticated-user-id':'attacker','oai-made-up':'admin'}))).status,200);assert.equal(seen.headers.get('oai-authenticated-user-email'),user.email);assert.equal(seen.headers.get('oai-made-up'),null);
-records.clear();assert.equal((await handle(request('/api/academy/email-verification/send',{},{} ,'otp'))).status,403);
-assert.equal((await handle(request('/api/academy/email-verification/send',{}, {email:'attacker@example.test'}))).status,200);assert.equal(lastOtp.email,user.email);assert.equal(lastOtp.create_user,false);
-assert.equal((await handle(request('/api/academy/email-verification/verify',{}, {code:'abc'}))).status,400);
-otpUser={...user,id:'other'};assert.equal((await handle(request('/api/academy/email-verification/verify',{}, {code:'123456'}))).status,403);assert.equal(records.size,0);
-otpUser=user;otpFailure=true;assert.equal((await handle(request('/api/academy/email-verification/verify',{}, {code:'123456'}))).status,403);assert.equal(records.size,0);otpFailure=false;
-assert.equal((await handle(request('/api/academy/email-verification/verify',{}, {code:'123456',expiresAt:'2099-01-01'}))).status,200);const saved=records.get(verificationKey(sessionId));assert.equal(Date.parse(saved.expiresAt)-Date.parse(saved.verifiedAt),EMAIL_VERIFICATION_MS);assert.equal(saved.email,user.email);assert.equal((await handle(request())).status,200);
-rateAllowed=false;assert.equal((await handle(request('/api/academy/email-verification/send',{},{}))).status,429);rateAllowed=true;
-live=false;assert.equal((await handle(request())).status,401);live=true;valid=false;assert.equal((await handle(request())).status,401);valid=true;
-user={...user,email_confirmed_at:null};assert.equal((await handle(request())).status,403);
-console.log('PASS: all-role email gate, exact 15-day expiry, server-held user/session binding, password prerequisite, OTP identity matching, failed-code/rate-limit rejection and forged-header replacement (mocked Auth)');
+function request(aal='aal1',headers={}){const token='test.'+btoa(JSON.stringify({aal,session_id:'session-1'}))+'.test';return new Request('https://project.supabase.co/academy/api/academy/trainees/test',{headers:{Authorization:'Bearer '+token,...headers}})}
+for(const email of config.members.map(x=>x.email)){user={...user,email};assert.equal((await handle(request('aal1'))).status,403);assert.equal((await handle(request('aal2'))).status,200);}
+user={...user,email:'both@example.test'};assert.equal((await handle(request('aal1',{'X-REU-Role':'trainee'}))).status,403);
+assert.equal((await handle(request('aal2',{'oai-authenticated-user-email':'attacker@example.test','oai-authenticated-user-id':'attacker','oai-made-up':'admin'}))).status,200);assert.equal(seen.headers.get('oai-authenticated-user-email'),user.email);assert.equal(seen.headers.get('oai-made-up'),null);
+user={...user,factors:[]};assert.equal((await handle(request('aal2'))).status,403);user={...user,factors:verified};
+live=false;assert.equal((await handle(request('aal2'))).status,401);live=true;valid=false;assert.equal((await handle(request('aal2'))).status,401);valid=true;
+user={...user,email:'unassigned@example.test'};assert.equal((await handle(request('aal2'))).status,403);user={...user,email:'both@example.test',email_confirmed_at:null};assert.equal((await handle(request('aal2'))).status,403);
+console.log('PASS: every-role authenticator gate, role-switch bypass prevention, verified-factor and live-session requirements, unassigned-user rejection and forged-header replacement (mocked Auth)');

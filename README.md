@@ -36,4 +36,4 @@ Map and final trainee test-out approval gates remain as defined by the REU progr
 
 ## Security hardening
 
-All roles must sign in with a password and verify an email code before opening academy data. Verification is valid for up to 15 days for that live Auth session. A new sign-in requires a new code. Supabase Authentication → Email Templates → Magic Link must include `{{ .Token }}`. Sign-in sessions are retained per tab. See [SECURITY.md](SECURITY.md) for verified checks, CSP limitations and remaining dashboard/live-account work.
+All roles must enroll an authenticator and complete MFA before opening academy data. A verified TOTP factor and Supabase-verified `aal2` session are required on every protected request. New sign-ins require a new authenticator code. Email-code verification has been retired. Sign-in sessions are retained per tab. See [SECURITY.md](SECURITY.md) for checks and remaining work.
