@@ -1,0 +1,16 @@
+const SB_URL=Deno.env.get('SUPABASE_URL');
+const SERVICE=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+async function sb(path,options={}){const r=await fetch(SB_URL+path,{...options,headers:{apikey:SERVICE,Authorization:'Bearer '+SERVICE,...options.headers}});if(!r.ok)throw Error('Protected storage request failed: '+r.status);return r;}
+async function rpc(name,args){return (await sb('/rest/v1/rpc/'+name,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(args)})).json()}
+export class SupabaseBucket{
+ async get(key){if(key.startsWith('assets/')){const name=key.slice(7),meta=await(await sb('/rest/v1/reu_assets?key=eq.'+encodeURIComponent(key)+'&select=*')).json();if(!meta[0])return null;const parts=await(await sb('/rest/v1/reu_records?key=like.'+encodeURIComponent('asset-chunks/'+name+'/*')+'&select=key,value&order=key.asc')).json();const bin=atob(parts.map(x=>x.value.base64).join(''));const compressed=Uint8Array.from(bin,x=>x.charCodeAt(0));const bytes=new Uint8Array(await new Response(new Blob([compressed]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());if(bytes.length!==Number(meta[0].bytes))throw Error('Incomplete protected document');return {body:bytes,etag:meta[0].sha256};}if(key.endsWith('.json')){const rows=await(await sb('/rest/v1/reu_records?key=eq.'+encodeURIComponent(key)+'&select=value,version')).json();if(!rows[0])return null;return {etag:rows[0].version,json:async()=>structuredClone(rows[0].value),body:JSON.stringify(rows[0].value)}}
+ const r=await fetch(SB_URL+'/storage/v1/object/authenticated/reu-private/'+key.split('/').map(encodeURIComponent).join('/'),{headers:{apikey:SERVICE,Authorization:'Bearer '+SERVICE}});if(r.status===404||r.status===400)return null;if(!r.ok)throw Error('File storage unavailable');return {body:r.body,etag:r.headers.get('etag'),json:()=>r.json()};}
+ async put(key,value,options={}){if(key.endsWith('.json'))return rpc('reu_record_put',{k:key,v:typeof value==='string'?JSON.parse(value):value,expected:options.onlyIf?.etagMatches||null,only_new:options.onlyIf?.etagDoesNotMatch==='*'});
+ await sb('/storage/v1/object/reu-private/'+key.split('/').map(encodeURIComponent).join('/'),{method:'POST',headers:{'Content-Type':options.httpMetadata?.contentType||'application/octet-stream','x-upsert':'true'},body:value});return {etag:crypto.randomUUID()};}
+}
+export class SupabaseDatabase{
+ prepare(sql){let values=[];sql=sql.replaceAll(' LIKE ',' ILIKE ').replace(/json_extract\(value,'\$\.([a-z]+)'\)/g,"value->>'$1'").replace('json_each(?)','jsonb_array_elements(?::jsonb)');const op={sql,values};return {op,bind(...v){values=v;op.values=v;return this},async run(){return (await rpc('reu_database_batch',{operations:[op]}))[0]},async all(){return (await rpc('reu_database_batch',{operations:[op]}))[0]},async first(){return (await this.all()).results[0]||null}};}
+ async batch(statements){return rpc('reu_database_batch',{operations:statements.map(x=>x.op)})}
+}
+export const environment={BUCKET:new SupabaseBucket(),DB:new SupabaseDatabase()};
+export {sb,rpc,SB_URL,SERVICE};

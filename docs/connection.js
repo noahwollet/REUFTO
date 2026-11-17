@@ -1,0 +1,1 @@
+window.REU_CONNECTION={"url": "https://rcdfrljvcpqnpptiteuu.supabase.co", "publishableKey": "sb_publishable_qNQ8t_6F8Qu2vPb95EYg2Q_BY0m2eGN", "api": "https://rcdfrljvcpqnpptiteuu.supabase.co/functions/v1/academy"};
