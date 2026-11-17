@@ -1,3 +1,4 @@
+import {mfaRequired,normalizePath} from './security.js';
 import worker from './core.js';
 import ASSETS from './assets.json' with {type:'json'};
 import {refreshReferenceAssets,referenceUploadChoices} from './reference-library.js';
@@ -28,15 +29,17 @@ async function authRoute(req,path){
 export async function handle(req){
  const origin=req.headers.get('Origin');if(origin&&origin!==ALLOWED)return result({error:'Origin not allowed'},403);
  if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
- const raw=new URL(req.url);const path=raw.pathname.replace(/^\/(?:functions\/v1\/)?academy(?=\/|$)/,'')||'/';
+ const raw=new URL(req.url);const path=normalizePath(raw.pathname);
  if(path.startsWith('/auth/'))return authRoute(req,path);
  const auth=req.headers.get('Authorization')||'';
  if(!auth.startsWith('Bearer ')){await securityEvent('Unsigned website access attempt',401);return result({error:'Sign in to your REU account.'},401)}
  const userResponse=await fetch(SB_URL+'/auth/v1/user',{headers:{apikey:Deno.env.get('SUPABASE_ANON_KEY'),Authorization:auth}});
  if(!userResponse.ok){await securityEvent('Invalid or expired sign-in token',401);return result({error:'Your session expired. Sign in again.'},401)}
  const user=await userResponse.json();if(!user.email_confirmed_at)return result({error:'Confirm your email before signing in.'},403);
- let session;try{const token=JSON.parse(atob(auth.slice(7).split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));session=token.session_id}catch{return result({error:'Invalid session'},401)}
+ let session,claims;try{const token=JSON.parse(atob(auth.slice(7).split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));session=token.session_id;claims=token}catch{return result({error:'Invalid session'},401)}
  if(!session||!await rpc('reu_session_live',{session_id:session,user_id:user.id}))return result({error:'Your session has ended. Sign in again.'},401);
+ const cfg=await environment.BUCKET.get('academy/config.json');const config=cfg?await cfg.json():{members:[]};
+ if(mfaRequired(user.email.toLowerCase(),config,CATALOG.bootstrapOwnerEmail,claims,user.factors||[]))return result({error:'Verify your authenticator to continue.',code:'mfa_required'},403);
  const headers=new Headers(req.headers);for(const k of [...headers.keys()])if(k.startsWith('oai-'))headers.delete(k);
  headers.set('oai-authenticated-user-id',user.id);headers.set('oai-authenticated-user-email',user.email.toLowerCase());
  // Names are display values only; roles and assignments come from server-controlled records.

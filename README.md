@@ -33,3 +33,7 @@ Map and final trainee test-out approval gates remain as defined by the REU progr
 ## Source and database setup
 
 `supabase/schema.sql` and `supabase/auth-security.sql` describe the deployed persistence and session controls. `scripts/prepare.py` prepares a migration from the authorized original academy checkout; set `REU_SOURCE` and provide the private catalog locally. The service-role key is read only inside Supabase from its runtime environment.
+
+## Security hardening
+
+Admins must enroll an authenticator and complete MFA before opening academy data, even when selecting a lower role. Sign-in sessions are retained per tab. See [SECURITY.md](SECURITY.md) for verified checks, CSP limitations and remaining dashboard/live-account work.
