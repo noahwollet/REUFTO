@@ -1,7 +1,7 @@
 'use strict';
 const REU=window.REU_CONNECTION;
 const nativeFetch=window.fetch.bind(window);let reuSession=null;try{reuSession=JSON.parse(localStorage.getItem('reu-auth-session')||'null')}catch{}
-function saveReuSession(value){reuSession=value;if(value)localStorage.setItem('reu-auth-session',JSON.stringify(value));else localStorage.removeItem('reu-auth-session')}
+function saveReuSession(value){if(value&&!value.expires_at)value.expires_at=Math.floor(Date.now()/1000)+Number(value.expires_in||3600);reuSession=value;if(value)localStorage.setItem('reu-auth-session',JSON.stringify(value));else localStorage.removeItem('reu-auth-session')}
 let refreshing=null;
 async function reuAccessToken(){if(!reuSession)return null;if(reuSession.expires_at*1000>Date.now()+60000)return reuSession.access_token;if(!refreshing)refreshing=(async()=>{const r=await nativeFetch(REU.url+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{apikey:REU.publishableKey,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:reuSession.refresh_token})});if(!r.ok){saveReuSession(null);throw Error('Your session expired. Sign in again.')}saveReuSession(await r.json());return reuSession.access_token})().finally(()=>refreshing=null);return refreshing}
 window.fetch=async function(input,options={}){const path=typeof input==='string'?input:input.url;if(/^\/(api\/academy|references\/|evidence\/)/.test(path)){const token=await reuAccessToken();return nativeFetch(REU.api+path,{...options,credentials:'omit',headers:{...options.headers,apikey:REU.publishableKey,...(token?{Authorization:'Bearer '+token}:{})}})}return nativeFetch(input,options)};

@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+globalThis.Deno={env:{get:()=> 'test'}};
+const {uploadReference,refreshReferenceAssets}=await import('../supabase/functions/academy/reference-library.js');
+let operations=[];globalThis.fetch=async(url,options={})=>{operations.push([url,options.method||'GET']);if(url.includes('/rpc/'))return Response.json(true);if(url.includes('/storage/'))return new Response('{}');return Response.json([])};
+const need=(ok,message,status=400)=>{if(!ok)throw Object.assign(Error(message),{status})};
+const req=(file='REU_IM_Fillable.pdf',body='%PDF-1.7 test',version='')=>new Request('https://test/reference-upload',{method:'POST',headers:{'X-Reference-File':file,'X-Reference-Version':version},body});
+await assert.rejects(uploadReference(req(),{role:'trainee'},need,()=>{}),e=>e.status===403);assert.equal(operations.length,0);
+await assert.rejects(uploadReference(req('unknown.pdf'),{role:'admin'},need,()=>{}),e=>e.status===400);
+await assert.rejects(uploadReference(req(undefined,'not a real file'),{role:'admin'},need,()=>{}),e=>e.status===400);
+await assert.rejects(uploadReference(req(undefined,'x'.repeat(15*1024*1024+1)),{role:'admin'},need,()=>{}),e=>e.status===413);
+await assert.rejects(uploadReference(req(undefined,undefined,'stale'),{role:'admin'},need,()=>{}),e=>e.status===409);
+operations=[];let held=false;const result=await uploadReference(req(),{role:'admin',email:'admin@example.test'},need,()=>{held=true;assert.equal(operations.filter(x=>x[0].includes('/storage/')).length,0)});assert.ok(held&&result.ok&&result.version.length===64);assert.ok(operations.some(x=>x[0].includes('/storage/')));assert.ok(operations.some(x=>x[0].includes('/rpc/reu_asset_put')));
+const assets={'/old.pdf':{}};const choices=await refreshReferenceAssets(assets);assert.equal(Object.keys(assets).length,0);assert.ok(choices.length>=63);assert.ok(choices.every(x=>!x.available));
+console.log('PASS: Admin boundary, format/size limits, stale version rejection, private upload ordering and availability refresh');

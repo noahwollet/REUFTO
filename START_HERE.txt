@@ -1,0 +1,36 @@
+REU FTO WEBSITE — MANUAL GITHUB UPLOAD
+
+1. Unzip REUFTO_GitHub_Upload.zip on your computer.
+2. Open https://github.com/noahwollet/REUFTO
+3. Choose Add file > Upload files.
+4. Drag the extracted contents into GitHub, including the docs folder. Keep the folders together. Upload the contents, not the ZIP itself and not an extra outer folder.
+5. Commit the files to main.
+6. Open Settings > Pages.
+7. Under Source, choose Deploy from a branch.
+8. Choose branch main and folder /docs, then Save.
+9. Wait for GitHub's Pages build to finish. The expected website address is:
+   https://noahwollet.github.io/REUFTO/
+
+SUPABASE SIGN-IN SETUP
+The frontend already points to your separate REU FTO Supabase project. Do not replace the publishable key with a service-role or secret key. The backend has already been deployed; do not rerun the SQL setup files on the existing database.
+
+In the REU FTO Supabase dashboard, open Authentication > URL Configuration.
+Set Site URL to https://noahwollet.github.io/REUFTO/
+Add the same address to Redirect URLs and save.
+
+Open the published website, use Create assigned account with your assigned Admin email, confirm the email, and return to sign in. Set your own password; no shared or default password is included. Admins assign additional employee roles inside the academy. A new registration alone grants no employee role.
+
+Before onboarding employees, configure your production email delivery in Supabase; the default email service has recipient and rate limits.
+
+CURRENT LIMITS
+- Existing employee and trainee records have not been migrated from the original website. That website remains available and unchanged.
+- The document library transfer is incomplete. Thirty-two existing reference documents were copied and checked; the other documents and blank onboarding templates are still pending transfer. Admins can add the remaining files in Resources > Private document manager. The website keeps unavailable templates inactive.
+- Automatic approval review stopped the remaining private-document transfer when this task changed to manual upload. Private PDFs, answer keys, employee records and the protected catalog are deliberately excluded from this GitHub-upload ZIP.
+- Map assessment and final trainee test-out approval gates remain as previously agreed. Publishing does not approve clinical content or release a trainee.
+
+WHAT IS INCLUDED
+- docs: the website, sign-in screen, styling, seven themes and public Supabase connection settings.
+- supabase: the deployed backend source and database schema, without private assessment content.
+- tests: authentication routing and public-file boundary checks.
+- .github/workflows: the existing optional Pages deployment workflow, which publishes docs.
+- README.md: technical setup and security notes.

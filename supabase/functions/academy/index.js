@@ -1,8 +1,10 @@
 import worker from './core.js';
+import ASSETS from './assets.json' with {type:'json'};
+import {refreshReferenceAssets,referenceUploadChoices} from './reference-library.js';
 import CATALOG from './catalog.json' with {type:'json'};
 import {environment,sb,rpc,SB_URL} from './persistence.js';
 const ALLOWED='https://noahwollet.github.io';
-const cors={'Access-Control-Allow-Origin':ALLOWED,'Access-Control-Allow-Methods':'GET,POST,OPTIONS','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-reu-role,x-reu-presentation,x-reu-presentation-role,x-reu-presentation-trainee,x-file-name,x-record-version,x-onboarding-form','Access-Control-Expose-Headers':'Content-Disposition,X-REU-Request-ID','Vary':'Origin','Cache-Control':'no-store'};
+const cors={'Access-Control-Allow-Origin':ALLOWED,'Access-Control-Allow-Methods':'GET,POST,OPTIONS','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-reu-role,x-reu-presentation,x-reu-presentation-role,x-reu-presentation-trainee,x-file-name,x-record-version,x-onboarding-form,x-reference-file,x-reference-version','Access-Control-Expose-Headers':'Content-Disposition,X-REU-Request-ID','Vary':'Origin','Cache-Control':'no-store'};
 function result(value,status=200){return Response.json(value,{status,headers:cors})}
 async function securityEvent(action,status,email='Unknown or unsigned visitor'){try{await sb('/rest/v1/activity_events',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:crypto.randomUUID(),at:new Date().toISOString(),request_id:crypto.randomUUID(),user_id:'',actor_email:email,role:'unassigned',category:'Authentication',action,phase:status<400?'Completed':'Denied or failed',status,method:'POST',path:'/auth',demonstration:0,details:'{}'})})}catch{}}
 async function authRoute(req,path){
@@ -40,6 +42,6 @@ export async function handle(req){
  // Names are display values only; roles and assignments come from server-controlled records.
  headers.set('oai-authenticated-user-full-name',encodeURIComponent(user.user_metadata?.name||user.email));headers.set('oai-authenticated-user-full-name-encoding','percent-encoded-utf-8');headers.set('Origin','https://reu-api.internal');
  const internal=new Request('https://reu-api.internal'+path+raw.search,{method:req.method,headers,...(!['GET','HEAD'].includes(req.method)?{body:req.body,duplex:'half'}:{})});
- const r=await worker.fetch(internal,environment);const h=new Headers(r.headers);for(const[k,v]of Object.entries(cors))h.set(k,v);return new Response(r.body,{status:r.status,headers:h});
+ await refreshReferenceAssets(ASSETS);const r=await worker.fetch(internal,environment);if(path==='/api/academy/bootstrap'&&r.ok){const payload=await r.json();const files=referenceUploadChoices();return result({...payload,migration:{documentsPending:files.some(f=>!f.available)},...(payload.account.role==='admin'?{referenceUploads:files}:{})})}const h=new Headers(r.headers);for(const[k,v]of Object.entries(cors))h.set(k,v);return new Response(r.body,{status:r.status,headers:h});
 }
 Deno.serve(async req=>{try{return await handle(req)}catch(e){console.error('REU request failed',String(e.message).slice(0,160));return result({error:'The training service is unavailable. Please retry shortly.'},503)}});

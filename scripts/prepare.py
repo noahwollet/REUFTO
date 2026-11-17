@@ -25,7 +25,7 @@ js=js.replace('Use the email assigned to your REU training account.','Use the em
 js=js.replace('href="/signout-with-chatgpt?return_to=%2F" target="_top" onclick="recordSignout()"','href="#" onclick="signOutReu();return false"')
 js=js.replace('ChatGPT sign-in email','REU sign-in email').replace('ChatGPT account','REU account')
 (D/'academy.js').write_text(js)
-html=(S/'public/index.html').read_text().replace('href="/academy.css"','href="./academy.css"').replace('src="/reu-patch.jpg"','src="./reu-patch.jpg"').replace('<script src="/academy.js" defer>','<script src="./connection.js"></script><script src="./auth.js"></script><script src="./academy.js" defer>')
+html=(S/'public/index.html').read_text().replace('href="/academy.css"','href="./academy.css"').replace('src="/reu-patch.jpg"','src="./reu-patch.jpg"').replace('<link rel="stylesheet" href="./academy.css">','<link rel="stylesheet" href="./academy.css"><link rel="stylesheet" href="./auth.css">').replace('<script src="/academy.js" defer>','<script src="./connection.js"></script><script src="./auth.js"></script><script src="./academy.js" defer>')
 (D/'index.html').write_text(html);(D/'404.html').write_text(html);(D/'.nojekyll').write_text('')
 (D/'connection.js').write_text("window.REU_CONNECTION="+json.dumps({'url':'https://rcdfrljvcpqnpptiteuu.supabase.co','publishableKey':'sb_publishable_qNQ8t_6F8Qu2vPb95EYg2Q_BY0m2eGN','api':'https://rcdfrljvcpqnpptiteuu.supabase.co/functions/v1/academy'})+';')
 manifest=[]

@@ -6,6 +6,8 @@ REU onboarding, daily PQS, response and driving logs, shift evaluations, FTO qua
 
 The `docs` directory is the GitHub Pages frontend. The Pages workflow publishes it on updates to `main`. If Pages has not been enabled, open repository **Settings → Pages** and select **GitHub Actions**. No build dependencies are needed for the frontend.
 
+The private reference library is partially populated. Admins can upload missing references and blank templates in Resources → Private document manager. Replacing a released reference holds it for review before employees can access the replacement. The application shows that status and only serves documents whose copied bytes have been verified. See [the document transfer inventory](DOCUMENT_TRANSFER.md).
+
 ## Employee sign-in
 
 Use the email assigned by the REU Training Officer. Create the assigned account, confirm the email and return to sign in. Account creation grants no training role. Admins assign roles and trainee profiles inside the academy. People may hold more than one role; the server validates the selected role on every request.
@@ -18,7 +20,7 @@ The deployed `academy` Supabase Edge Function verifies the Auth user, confirmed 
 
 All application tables have RLS enabled and deny direct `anon` and `authenticated` access. Only the verified server uses the service role. Private document downloads are checked by role. Completed onboarding paperwork, activity logs and record exports remain Admin-only. Database helpers use invoker security and are executable only by the service role. Record updates use an atomic version check. Activity history cannot be updated or deleted by the service role.
 
-Private references are stored as compressed chunks in protected database records. Employee uploads use the private `reu-private` Storage bucket. The public repository contains no completed forms, employee records, calendar subscription URLs, passwords, secret keys or protected assessment answers.
+Existing private references are stored as compressed chunks in protected database records. New reference uploads use private Storage with version-checked metadata and replacement history. Employee uploads use the private `reu-private` Storage bucket. The public repository contains no completed forms, employee records, calendar subscription URLs, passwords, secret keys or protected assessment answers.
 
 The protected catalog is intentionally omitted from Git. Redeploying the backend requires the authorized private catalog, including its `bootstrapOwnerEmail`, together with the files under `supabase/functions/academy`. Never commit this catalog. Only the Supabase URL and publishable frontend key belong in `docs/connection.js`.
 
