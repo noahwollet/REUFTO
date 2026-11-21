@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {finalReviewAction} from '../supabase/functions/academy/final-review.js';
+const d={attachments:[{id:'evidence',scope:'admin-final-test'}]},p={id:'trainee'},c={adoption:{version:'test'}};
+const need=(v,message,status=400)=>{if(!v)throw Object.assign(Error(message),{status})},textValue=(v,label)=>{need(typeof v==='string'&&v.trim(),label+' required');return v.trim()};let eligible=true;
+const run=(b,email='first@example.test',role='admin')=>finalReviewAction({a:{email,name:email,role},p,d,c,b,readiness:()=>({eligible,blockers:eligible?[]:['Training incomplete']}),independentAdmin:(c,a)=>need(a.role==='admin'&&a.email!=='self@example.test','Independent Admin required',403),need,textValue,now:()=> '2026-11-21T12:00:00Z',today:()=> '2026-11-21',version:'test'});
+const test={date:'2026-11-21',instrument:'Approved agency test v1',reference:'Completed test evidence',result:'Pass',fileId:'evidence'},record={action:'record-final-testout',written:test,practical:test,notes:'Actual assessments verified',attest:true};
+assert.throws(()=>run(record,'trainer@example.test','trainer'),/Independent Admin/);eligible=false;assert.throws(()=>run(record),/Training incomplete/);eligible=true;
+assert.throws(()=>run({...record,written:{...test,fileId:'other'}}),/Attach/);run(record);assert.equal(d.finalTest.written.passed,true);assert.equal(d.release,undefined);
+assert.throws(()=>run({action:'second-review-testout',decision:'Approve',notes:'Reviewed',attest:true}),/different Admin/);
+const release={action:'release-testout',effectiveDate:'2026-11-21',clinicalApproval:'Required approval reference',operationalApproval:'Operational reference',notes:'Final reviewed decision',attest:true};assert.throws(()=>run(release),/independent second/);
+run({action:'second-review-testout',decision:'Approve',notes:'Evidence independently reviewed',attest:true},'second@example.test');c.adoption=null;assert.throws(()=>run(release),/adoption/);c.adoption={version:'test'};run(release);assert.equal(d.release.by,'first@example.test');assert.equal(d.release.snapshot.finalTest.secondReview.by,'second@example.test');
+assert.throws(()=>run(release),/already recorded/);
+console.log('PASS: actual assessment evidence required, training gates, independent Admin review, adoption gate, explicit final release and retained snapshot');

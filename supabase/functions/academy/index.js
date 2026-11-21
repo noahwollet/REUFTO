@@ -1,11 +1,11 @@
-import {mfaRequired,normalizePath} from './security.js';
+import {mfaRequired,normalizePath,assignedAccess} from './security.js';
 import worker from './core.js';
 import ASSETS from './assets.json' with {type:'json'};
 import {refreshReferenceAssets,referenceUploadChoices} from './reference-library.js';
 import CATALOG from './catalog.json' with {type:'json'};
 import {environment,sb,rpc,SB_URL} from './persistence.js';
 const ALLOWED='https://noahwollet.github.io';
-const cors={'Access-Control-Allow-Origin':ALLOWED,'Access-Control-Allow-Methods':'GET,POST,OPTIONS','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-reu-role,x-reu-presentation,x-reu-presentation-role,x-reu-presentation-trainee,x-file-name,x-record-version,x-onboarding-form,x-reference-file,x-reference-version','Access-Control-Expose-Headers':'Content-Disposition,X-REU-Request-ID','Vary':'Origin','Cache-Control':'no-store'};
+const cors={'Access-Control-Allow-Origin':ALLOWED,'Access-Control-Allow-Methods':'GET,POST,OPTIONS','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-file-name,x-record-version,x-onboarding-form,x-record-scope,x-reference-file,x-reference-version','Access-Control-Expose-Headers':'Content-Disposition,X-REU-Request-ID','Vary':'Origin','Cache-Control':'no-store'};
 function result(value,status=200){return Response.json(value,{status,headers:cors})}
 async function securityEvent(action,status,email='Unknown or unsigned visitor'){try{await sb('/rest/v1/activity_events',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:crypto.randomUUID(),at:new Date().toISOString(),request_id:crypto.randomUUID(),user_id:'',actor_email:email,role:'unassigned',category:'Authentication',action,phase:status<400?'Completed':'Denied or failed',status,method:'POST',path:'/auth',demonstration:0,details:'{}'})})}catch{}}
 async function authRoute(req,path){
@@ -41,6 +41,7 @@ export async function handle(req){
  const cfg=await environment.BUCKET.get('academy/config.json');const config=cfg?await cfg.json():{members:[]};
  const email=user.email.toLowerCase();if(email!==CATALOG.bootstrapOwnerEmail&&!(config.members||[]).some(m=>m.email===email&&m.active!==false))return result({error:'This account has no REU training role.'},403);
  if(mfaRequired(claims,user.factors||[]))return result({error:'Verify your authenticator to continue.',code:'mfa_required'},403);
+ const fixedRole=assignedAccess(config.members?.find(m=>m.email===email),email===CATALOG.bootstrapOwnerEmail);if(req.headers.has('X-REU-Role')&&req.headers.get('X-REU-Role')!==fixedRole){await securityEvent('Disabled role switch attempted',403,email);return result({error:'Role switching is disabled. Refresh to use your assigned access level.'},403)}if(path==='/api/academy/presentation'||[...req.headers.keys()].some(k=>k.startsWith('x-reu-presentation'))){await securityEvent('Removed demonstration access attempted',403,email);return result({error:'Demonstration and role switching have been removed.'},403)}
  const headers=new Headers(req.headers);for(const k of [...headers.keys()])if(k.startsWith('oai-'))headers.delete(k);
  headers.set('oai-authenticated-user-id',user.id);headers.set('oai-authenticated-user-email',user.email.toLowerCase());
  // Names are display values only; roles and assignments come from server-controlled records.

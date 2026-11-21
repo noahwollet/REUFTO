@@ -1,0 +1,19 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {assignedAccess} from '../supabase/functions/academy/security.js';
+assert.equal(assignedAccess({roles:['trainer','trainee'],role:'trainer'}),'trainer');
+assert.equal(assignedAccess({roles:['trainer','trainee'],role:'trainer',primaryRole:'trainee'}),'trainee');
+assert.equal(assignedAccess({roles:['trainer'],primaryRole:'admin'}),'trainer');
+assert.equal(assignedAccess({roles:['trainee']},true),'admin');
+globalThis.Deno={env:{get:()=> 'test'}};
+const worker=(await import('../supabase/functions/academy/core.js')).default;
+const version=(await import('../supabase/functions/academy/catalog.json',{with:{type:'json'}})).default.version;
+const cfg={version,people:[],members:[{email:'multi@example.test',name:'Multi',roles:['trainer','trainee'],role:'trainer',primaryRole:'trainer'}],referenceRelease:[]};let writes=0;
+const env={BUCKET:{get:async key=>key==='academy/config.json'?{etag:'cfg',json:async()=>cfg}:null,put:async()=>{writes++;return {etag:'new'}}},DB:{prepare:()=>({bind(){return this},run:async()=>({success:true}),all:async()=>({results:[]})})}};
+function req(path='/bootstrap',headers={}){return new Request('https://reu-api.internal/api/academy'+path,{headers:{'oai-authenticated-user-id':'u','oai-authenticated-user-email':'multi@example.test',...headers}})}
+let r=await worker.fetch(req(),env);assert.equal(r.status,200);assert.equal((await r.json()).account.role,'trainer');
+r=await worker.fetch(req('/bootstrap',{'X-REU-Role':'trainee'}),env);assert.equal(r.status,403);
+for(const h of [{'X-REU-Presentation':'1'},{'X-REU-Presentation-Role':'admin'},{'X-REU-Presentation-Trainee':'sample'}])assert.equal((await worker.fetch(req('/bootstrap',h),env)).status,403);
+assert.equal((await worker.fetch(req('/presentation'),env)).status,410);assert.equal(writes,0);
+const client=fs.readFileSync(new URL('../docs/academy.js',import.meta.url),'utf8');for(const word of ['switchRealRole','switchPresentation','openRoleView','roleSwitchBar','X-REU-Role','Switch role'])assert.ok(!client.includes(word),word+' remains in public client');assert.ok(client.includes("sessionStorage.removeItem('reu-active-role')"));
+console.log('PASS: server-assigned access, disabled role-header overrides, retired demo routes, no sample writes and no role-switch controls');
