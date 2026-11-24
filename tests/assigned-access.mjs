@@ -12,6 +12,7 @@ const cfg={version,people:[],members:[{email:'multi@example.test',name:'Multi',r
 const env={BUCKET:{get:async key=>key==='academy/config.json'?{etag:'cfg',json:async()=>cfg}:null,put:async()=>{writes++;return {etag:'new'}}},DB:{prepare:()=>({bind(){return this},run:async()=>({success:true}),all:async()=>({results:[]})})}};
 function req(path='/bootstrap',headers={}){return new Request('https://reu-api.internal/api/academy'+path,{headers:{'oai-authenticated-user-id':'u','oai-authenticated-user-email':'multi@example.test',...headers}})}
 let r=await worker.fetch(req(),env);assert.equal(r.status,200);assert.equal((await r.json()).account.role,'trainer');
+r=await worker.fetch(req('/bootstrap',{'oai-authenticated-user-full-name':'multi@example.test'}),env);assert.equal((await r.json()).account.name,'Multi');
 r=await worker.fetch(req('/bootstrap',{'X-REU-Role':'trainee'}),env);assert.equal(r.status,403);
 for(const h of [{'X-REU-Presentation':'1'},{'X-REU-Presentation-Role':'admin'},{'X-REU-Presentation-Trainee':'sample'}])assert.equal((await worker.fetch(req('/bootstrap',h),env)).status,403);
 assert.equal((await worker.fetch(req('/presentation'),env)).status,410);assert.equal(writes,0);
