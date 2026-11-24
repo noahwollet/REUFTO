@@ -40,7 +40,7 @@ export async function handle(req){
  if(!session||!await rpc('reu_session_live',{session_id:session,user_id:user.id}))return result({error:'Your session has ended. Sign in again.'},401);
  const cfg=await environment.BUCKET.get('academy/config.json');const config=cfg?await cfg.json():{members:[]};
  const email=user.email.toLowerCase();if(email!==CATALOG.bootstrapOwnerEmail&&!(config.members||[]).some(m=>m.email===email&&m.active!==false))return result({error:'This account has no REU training role.'},403);
- if(mfaRequired(claims,user.factors||[]))return result({error:'Verify your authenticator to continue.',code:'mfa_required'},403);
+ if(mfaRequired(claims,user.factors||[]))return result({error:'Verify your authenticator to continue. Verification is required every 24 hours.',code:'mfa_required'},403);
  const fixedRole=assignedAccess(config.members?.find(m=>m.email===email),email===CATALOG.bootstrapOwnerEmail);if(req.headers.has('X-REU-Role')&&req.headers.get('X-REU-Role')!==fixedRole){await securityEvent('Disabled role switch attempted',403,email);return result({error:'Role switching is disabled. Refresh to use your assigned access level.'},403)}if(path==='/api/academy/presentation'||[...req.headers.keys()].some(k=>k.startsWith('x-reu-presentation'))){await securityEvent('Removed demonstration access attempted',403,email);return result({error:'Demonstration and role switching have been removed.'},403)}
  const headers=new Headers(req.headers);for(const k of [...headers.keys()])if(k.startsWith('oai-'))headers.delete(k);
  headers.set('oai-authenticated-user-id',user.id);headers.set('oai-authenticated-user-email',user.email.toLowerCase());

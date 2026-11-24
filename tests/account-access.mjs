@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+globalThis.Deno={env:{get:()=> 'test'}};
+const worker=(await import('../supabase/functions/academy/core.js')).default;
+const catalog=(await import('../supabase/functions/academy/catalog.json',{with:{type:'json'}})).default;
+const cfg={version:catalog.version,people:[],members:[{email:'admin@test.example',name:'Admin',roles:['admin'],role:'admin'},{email:'fto@test.example',name:'FTO',roles:['trainer','trainee'],role:'trainer',primaryRole:'trainer',traineeId:'old-training'},{email:catalog.bootstrapOwnerEmail,name:'Owner',roles:['admin'],role:'admin'}],referenceRelease:[],audit:[]};let writes=0,lastSaved;
+const env={BUCKET:{get:async key=>key==='academy/config.json'?{etag:'cfg',json:async()=>structuredClone(cfg)}:null,put:async(key,value)=>{writes++;lastSaved=JSON.parse(value);return {etag:'new'}}},DB:{prepare:()=>({bind(){return this},run:async()=>({success:true}),all:async()=>({results:[]})})}};
+const call=(body,email='admin@test.example')=>worker.fetch(new Request('https://reu-api.internal/api/academy/config',{method:'POST',headers:{'Content-Type':'application/json',Origin:'https://reu-api.internal','oai-authenticated-user-id':'u','oai-authenticated-user-email':email},body:JSON.stringify({etag:'cfg',...body})}),env);
+let r=await call({action:'remove-member-role',email:'fto@test.example',role:'trainer'});assert.equal(r.status,200);assert.equal(writes,1);const changed=lastSaved.members.find(m=>m.email==='fto@test.example');assert.deepEqual(changed.roles,['trainee']);assert.equal(changed.primaryRole,'trainee');assert.ok(changed.trainingProfileIds.includes('old-training'));assert.equal(lastSaved.audit.at(-1).action,'Account role removed');
+r=await call({action:'remove-member-role',email:'fto@test.example',role:'admin'});assert.equal(r.status,400);
+r=await call({action:'remove-member-role',email:'admin@test.example',role:'admin'});assert.equal(r.status,403);
+r=await call({action:'deactivate-member',email:'admin@test.example'});assert.equal(r.status,403);
+r=await call({action:'remove-member-role',email:catalog.bootstrapOwnerEmail,role:'admin'});assert.equal(r.status,403);
+r=await call({action:'deactivate-member',email:catalog.bootstrapOwnerEmail});assert.equal(r.status,403);
+r=await call({action:'deactivate-member',email:'fto@test.example'});assert.equal(r.status,200);assert.equal(lastSaved.members.find(m=>m.email==='fto@test.example').active,false);assert.ok(!lastSaved.people.length);
+r=await call({action:'deactivate-member',email:'admin@test.example'},'fto@test.example');assert.equal(r.status,403);
+r=await call({action:'deactivate-member',email:'fto@test.example',etag:'stale'});assert.equal(r.status,409);
+assert.equal(writes,2);
+console.log('PASS: Admin-only role removal, revocation, protected self/owner access, assigned-role validation, stale configuration rejection');

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {mfaRequired,normalizePath} from '../supabase/functions/academy/security.js';
 const verified=[{status:'verified',factor_type:'totp'}];
-assert.ok(mfaRequired({aal:'aal1'},verified));assert.ok(mfaRequired({aal:'aal2'},[]));assert.ok(mfaRequired({aal:'aal2'},[{status:'unverified',factor_type:'totp'}]));assert.equal(mfaRequired({aal:'aal2'},verified),false);
+assert.ok(mfaRequired({aal:'aal1'},verified));assert.ok(mfaRequired({aal:'aal2'},[]));assert.ok(mfaRequired({aal:'aal2'},[{status:'unverified',factor_type:'totp'}]));assert.ok(mfaRequired({aal:'aal2'},verified));const now=Math.floor(Date.now()/1000);assert.equal(mfaRequired({aal:'aal2',amr:[{method:'totp',timestamp:now}]},verified),false);for(const age of [86400,86401])assert.ok(mfaRequired({aal:'aal2',amr:[{method:'totp',timestamp:now-age}]},verified,now));assert.equal(mfaRequired({aal:'aal2',amr:[{method:'totp',timestamp:now-86399}]},verified,now),false);assert.ok(mfaRequired({aal:'aal2',amr:[{method:'token_refresh',timestamp:now}]},verified,now));assert.ok(mfaRequired({aal:'aal2',amr:[{method:'totp',timestamp:now+1}]},verified,now));
 for(const prefix of ['/academy','/functions/v1/academy',''])assert.equal(normalizePath(prefix+'/auth/signup'),'/auth/signup');
 assert.equal(normalizePath('/academy-other/auth/signup'),'/academy-other/auth/signup');
 globalThis.Deno={env:{get:()=> 'test'},serve(){}};
@@ -10,7 +10,7 @@ const config={members:[{email:'both@example.test',roles:['admin','trainee']},{em
 let live=true,valid=true,user={id:'user-1',email:'both@example.test',email_confirmed_at:'2026-01-01',factors:verified},seen;
 globalThis.fetch=async(url)=>{if(url.includes('/auth/v1/user'))return Response.json(user,{status:valid?200:401});if(url.includes('/rpc/reu_session_live'))return Response.json(live);if(url.includes('/reu_assets'))return Response.json([]);if(url.includes('/activity_events'))return Response.json({});throw Error('Unexpected dependency '+url)};
 worker.fetch=async req=>{seen=req;return Response.json({ok:true})};
-function request(aal='aal1',headers={}){const token='test.'+btoa(JSON.stringify({aal,session_id:'session-1'}))+'.test';return new Request('https://project.supabase.co/academy/api/academy/trainees/test',{headers:{Authorization:'Bearer '+token,...headers}})}
+function request(aal='aal1',headers={}){const token='test.'+btoa(JSON.stringify({aal,session_id:'session-1',amr:[{method:'totp',timestamp:Math.floor(Date.now()/1000)}]}))+'.test';return new Request('https://project.supabase.co/academy/api/academy/trainees/test',{headers:{Authorization:'Bearer '+token,...headers}})}
 for(const email of config.members.map(x=>x.email)){user={...user,email};assert.equal((await handle(request('aal1'))).status,403);assert.equal((await handle(request('aal2'))).status,200);}
 user={...user,email:'both@example.test'};assert.equal((await handle(request('aal1',{'X-REU-Role':'trainee'}))).status,403);
 assert.equal((await handle(request('aal2',{'oai-authenticated-user-email':'attacker@example.test','oai-authenticated-user-id':'attacker','oai-made-up':'admin'}))).status,200);assert.equal(seen.headers.get('oai-authenticated-user-email'),user.email);assert.equal(seen.headers.get('oai-made-up'),null);
